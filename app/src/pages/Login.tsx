@@ -51,7 +51,7 @@ export const Login: React.FC<LoginProps> = ({ onSuccess }) => {
         method: 'POST',
         body: JSON.stringify({
           key: ownerKey.trim(),
-          username: ownerUsername.trim() || 'Dueña'
+          username: ownerUsername.trim() || 'Owner'
         })
       });
 
@@ -59,7 +59,7 @@ export const Login: React.FC<LoginProps> = ({ onSuccess }) => {
       localStorage.setItem('mambobot_user', JSON.stringify(res.user));
       onSuccess(res.user);
     } catch (err: any) {
-      setError(err.message || 'Error de acceso de dueña');
+      setError(err.message || 'Error de acceso de owner');
     } finally {
       setLoading(false);
     }
@@ -96,7 +96,7 @@ export const Login: React.FC<LoginProps> = ({ onSuccess }) => {
                   : 'text-gray-400 hover:text-white'
               }`}
             >
-              👑 Dueña (Maestra)
+              👑 Owner
             </button>
             <button
               onClick={() => { setTab('pin'); setError(null); }}
@@ -121,13 +121,13 @@ export const Login: React.FC<LoginProps> = ({ onSuccess }) => {
             <form onSubmit={handleOwnerLogin} className="space-y-4">
               <div>
                 <label className="block text-xs font-medium text-gray-300 mb-1">
-                  Clave Maestra de Dueña
+                  Contraseña de Owner
                 </label>
                 <div className="relative">
                   <KeyRound className="w-4 h-4 text-gray-400 absolute left-3 top-3" />
                   <input
                     type="password"
-                    placeholder="Clave maestra (ej: mambobot2026)"
+                    placeholder="Contraseña"
                     value={ownerKey}
                     onChange={(e) => setOwnerKey(e.target.value)}
                     className="w-full bg-[#182138] border border-gray-700/80 rounded-xl pl-9 pr-3 py-2.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-violet-500"
@@ -135,7 +135,7 @@ export const Login: React.FC<LoginProps> = ({ onSuccess }) => {
                   />
                 </div>
                 <p className="text-[11px] text-gray-500 mt-1">
-                  Acceso directo sin necesidad de encender el bot previamente.
+                  Acceso directo de Owner sin necesidad de encender el bot previamente.
                 </p>
               </div>
 

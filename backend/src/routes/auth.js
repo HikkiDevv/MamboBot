@@ -22,21 +22,21 @@ export function requireAuth(req, res, next) {
   }
 }
 
-// Middleware para verificar que sea dueña o mod
+// Middleware para verificar que sea owner o mod
 export function requireStaff(req, res, next) {
   if (!req.user || (req.user.role !== 'owner' && req.user.role !== 'mod')) {
-    return res.status(403).json({ error: 'Acceso restringido a moderadores y dueña' });
+    return res.status(403).json({ error: 'Acceso restringido a moderadores y owner' });
   }
   next();
 }
 
-// Login directo de Dueña con Clave Maestra (útil cuando el bot aún no está encendido)
+// Login directo de Owner con Contraseña
 authRouter.post('/login-owner', (req, res) => {
   const { key, username } = req.body;
   const masterKey = process.env.OWNER_SECRET_KEY || 'mambobot2026';
 
   if (!key || key !== masterKey) {
-    return res.status(401).json({ error: 'Clave Maestra de Dueña incorrecta' });
+    return res.status(401).json({ error: 'Contraseña de owner incorrecta' });
   }
 
   // Id virtual de owner inicial o existente
@@ -44,7 +44,7 @@ authRouter.post('/login-owner', (req, res) => {
   const user = {
     id: ownerId,
     username: username || 'Owner',
-    first_name: 'Dueña',
+    first_name: 'Owner',
     role: 'owner'
   };
 
