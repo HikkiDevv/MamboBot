@@ -6,7 +6,8 @@ import {
   getConfig, 
   getFilterConfig, 
   updateFilterConfig, 
-  getLeaderboard 
+  getLeaderboard,
+  getUserByUsername
 } from '../database/queries.js';
 import { requireAuth, requireStaff } from './auth.js';
 import { getBot } from '../bot/bot.js';
@@ -54,10 +55,22 @@ moderacionRouter.post('/filters', requireStaff, (req, res) => {
 
 // 5. Registrar acción de moderación manual desde el panel
 moderacionRouter.post('/action', requireStaff, async (req, res) => {
-  const { action, targetUserId, targetUsername, reason } = req.body;
+  let { action, targetUserId, targetUsername, reason } = req.body;
 
-  if (!action || !targetUserId) {
-    return res.status(400).json({ error: 'Acción y targetUserId son requeridos' });
+  if (!action) {
+    return res.status(400).json({ error: 'Acción es requerida' });
+  }
+
+  // Si no pasaron el ID numérico pero pasaron @username, resolverlo en la DB
+  if (!targetUserId && targetUsername) {
+    const found = getUserByUsername(targetUsername);
+    if (found) {
+      targetUserId = found.id;
+    }
+  }
+
+  if (!targetUserId) {
+    return res.status(400).json({ error: 'Debes seleccionar un usuario válido del grupo' });
   }
 
   addModLog({

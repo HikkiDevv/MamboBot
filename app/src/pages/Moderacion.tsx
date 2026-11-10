@@ -8,14 +8,14 @@ import {
   UserCheck, 
   Plus, 
   X, 
-  Trash2, 
   Save, 
   Sparkles, 
   Link as LinkIcon, 
   MessageSquare, 
   Trophy, 
-  Award,
-  Users
+  Users,
+  Search,
+  Check
 } from 'lucide-react';
 import { apiRequest } from '../api/client';
 
@@ -23,6 +23,7 @@ export const Moderacion: React.FC = () => {
   const [subTab, setSubTab] = useState<'logs' | 'filters' | 'leaderboard'>('logs');
   const [logs, setLogs] = useState<any[]>([]);
   const [leaderboard, setLeaderboard] = useState<any[]>([]);
+  const [allUsers, setAllUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<string>('all');
   const [feedback, setFeedback] = useState<string | null>(null);
@@ -38,21 +39,23 @@ export const Moderacion: React.FC = () => {
   // Modal Sanción Manual
   const [showActionModal, setShowActionModal] = useState(false);
   const [actionType, setActionType] = useState<'warn' | 'kick' | 'ban'>('warn');
-  const [targetUserId, setTargetUserId] = useState('');
-  const [targetUsername, setTargetUsername] = useState('');
+  const [selectedUser, setSelectedUser] = useState<any | null>(null);
+  const [userSearch, setUserSearch] = useState('');
   const [reason, setReason] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   const fetchModerationData = async () => {
     try {
-      const [logsRes, filtersRes, leadersRes] = await Promise.all([
+      const [logsRes, filtersRes, leadersRes, usersRes] = await Promise.all([
         apiRequest('/moderacion/logs?limit=80').catch(() => []),
         apiRequest('/moderacion/filters').catch(() => null),
-        apiRequest('/moderacion/leaderboard?limit=30').catch(() => [])
+        apiRequest('/moderacion/leaderboard?limit=30').catch(() => []),
+        apiRequest('/sorteos/config/users').catch(() => [])
       ]);
 
       setLogs(logsRes);
       setLeaderboard(leadersRes);
+      setAllUsers(usersRes);
 
       if (filtersRes) {
         setBlockLinks(filtersRes.blockLinksEnabled);
@@ -106,9 +109,17 @@ export const Moderacion: React.FC = () => {
     }
   };
 
+  const openSanctionForUser = (user: any) => {
+    setSelectedUser(user);
+    setShowActionModal(true);
+  };
+
   const handleManualAction = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!targetUserId) return;
+    if (!selectedUser) {
+      setFeedback('Por favor selecciona un miembro de la lista.');
+      return;
+    }
     setSubmitting(true);
     setFeedback(null);
 
@@ -117,16 +128,15 @@ export const Moderacion: React.FC = () => {
         method: 'POST',
         body: JSON.stringify({
           action: actionType,
-          targetUserId: Number(targetUserId),
-          targetUsername: targetUsername || undefined,
+          targetUserId: selectedUser.id,
+          targetUsername: selectedUser.username || selectedUser.first_name,
           reason
         })
       });
 
-      setFeedback(`Acción de moderación (${actionType.toUpperCase()}) aplicada con éxito.`);
+      setFeedback(`✅ Acción de moderación (${actionType.toUpperCase()}) aplicada a @${selectedUser.username || selectedUser.first_name || selectedUser.id}`);
       setShowActionModal(false);
-      setTargetUserId('');
-      setTargetUsername('');
+      setSelectedUser(null);
       setReason('');
       await fetchModerationData();
     } catch (err: any) {
@@ -139,6 +149,15 @@ export const Moderacion: React.FC = () => {
   const filteredLogs = logs.filter((log) => {
     if (filter === 'all') return true;
     return log.action === filter;
+  });
+
+  const searchedUsers = allUsers.filter((u) => {
+    const q = userSearch.toLowerCase();
+    return (
+      (u.username && u.username.toLowerCase().includes(q)) ||
+      (u.first_name && u.first_name.toLowerCase().includes(q)) ||
+      u.id.toString().includes(q)
+    );
   });
 
   return (
@@ -154,7 +173,11 @@ export const Moderacion: React.FC = () => {
         </div>
 
         <button
-          onClick={() => setShowActionModal(true)}
+          onClick={() => {
+            setSelectedUser(null);
+            setUserSearch('');
+            setShowActionModal(true);
+          }}
           className="px-3 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold flex items-center gap-1.5 shadow-lg shadow-rose-900/30 transition active:scale-95"
         >
           <Plus className="w-4 h-4" />
@@ -200,7 +223,6 @@ export const Moderacion: React.FC = () => {
       {/* ================= PESTAÑA 1: BITÁCORA LOGS ================= */}
       {subTab === 'logs' && (
         <div>
-          {/* Filtros rápidos */}
           <div className="flex gap-1.5 overflow-x-auto pb-2 mb-3">
             {[
               { id: 'all', label: 'Todos' },
@@ -282,7 +304,6 @@ export const Moderacion: React.FC = () => {
       {/* ================= PESTAÑA 2: FILTROS & BIENVENIDA ================= */}
       {subTab === 'filters' && (
         <div className="space-y-4">
-          {/* Bloqueo de Enlaces */}
           <div className="bg-[#121828] border border-gray-800 rounded-3xl p-4 shadow-lg">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
@@ -306,7 +327,6 @@ export const Moderacion: React.FC = () => {
             </div>
           </div>
 
-          {/* Lista Negra de Palabras */}
           <div className="bg-[#121828] border border-gray-800 rounded-3xl p-4 shadow-lg">
             <h3 className="text-xs font-bold uppercase tracking-wider text-gray-300 flex items-center gap-1.5 mb-2">
               <AlertTriangle className="w-4 h-4 text-amber-400" />
@@ -316,7 +336,6 @@ export const Moderacion: React.FC = () => {
               Si un mensaje contiene alguna de estas palabras, el bot lo borra y advierte al usuario.
             </p>
 
-            {/* Input agregar palabra */}
             <form onSubmit={handleAddWord} className="flex gap-2 mb-3">
               <input
                 type="text"
@@ -333,7 +352,6 @@ export const Moderacion: React.FC = () => {
               </button>
             </form>
 
-            {/* Chips de palabras */}
             <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto">
               {blacklistWords.length === 0 ? (
                 <span className="text-[11px] text-gray-500">No hay palabras en la lista negra.</span>
@@ -357,7 +375,6 @@ export const Moderacion: React.FC = () => {
             </div>
           </div>
 
-          {/* Plantilla de Bienvenida */}
           <div className="bg-[#121828] border border-gray-800 rounded-3xl p-4 shadow-lg">
             <div className="flex items-center justify-between mb-2">
               <h3 className="text-xs font-bold uppercase tracking-wider text-gray-300 flex items-center gap-1.5">
@@ -388,7 +405,6 @@ export const Moderacion: React.FC = () => {
             />
           </div>
 
-          {/* Botón Guardar Cambios */}
           <button
             onClick={handleSaveFilters}
             disabled={savingFilters}
@@ -409,7 +425,7 @@ export const Moderacion: React.FC = () => {
               Sistema de Niveles & Tickets Automáticos
             </h3>
             <p className="text-[11px] text-gray-400 leading-relaxed">
-              Cada mensaje suma <b>XP</b>. Subir de nivel suma <b>+0.05x</b> de suerte permanente en sorteos. Cada amigo invitado mediante <code>/invitar</code> suma <b>+0.10x</b>.
+              Cada mensaje suma <b>XP</b>. Subir de nivel suma <b>+0.05x</b> de suerte permanente en sorteos. Cada amigo invitado suma <b>+0.10x</b>.
             </p>
           </div>
 
@@ -425,7 +441,6 @@ export const Moderacion: React.FC = () => {
                   className="bg-[#121828] border border-gray-800 rounded-2xl p-3 flex items-center justify-between"
                 >
                   <div className="flex items-center gap-3">
-                    {/* Medalla o número */}
                     <div className="w-7 text-center font-bold text-sm">
                       {idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : (
                         <span className="text-xs text-gray-500 font-mono">#{idx + 1}</span>
@@ -449,10 +464,17 @@ export const Moderacion: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="text-right">
-                    <span className="text-xs font-bold text-amber-400 bg-amber-400/10 px-2.5 py-1 rounded-xl border border-amber-400/20">
-                      x{(u.calculated_weight || 1).toFixed(2)} suerte
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-lg border border-amber-400/20">
+                      x{(u.calculated_weight || 1).toFixed(2)}
                     </span>
+                    <button
+                      onClick={() => openSanctionForUser(u)}
+                      title="Sancionar miembro"
+                      className="p-1.5 rounded-lg bg-gray-800 hover:bg-rose-500/20 text-gray-400 hover:text-rose-400 transition"
+                    >
+                      <ShieldAlert className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                 </div>
               ))}
@@ -461,7 +483,7 @@ export const Moderacion: React.FC = () => {
         </div>
       )}
 
-      {/* Modal Sanción Manual */}
+      {/* ================= MODAL SANCIÓN DIRECTA (SIN ID MANUAL) ================= */}
       {showActionModal && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-[#111827] border border-gray-700 w-full max-w-sm rounded-3xl p-5 shadow-2xl">
@@ -476,58 +498,101 @@ export const Moderacion: React.FC = () => {
             </div>
 
             <form onSubmit={handleManualAction} className="space-y-3">
+              {/* Selector de Miembro */}
+              <div>
+                <label className="block text-xs font-medium text-gray-300 mb-1">
+                  Miembro a Sancionar *
+                </label>
+
+                {selectedUser ? (
+                  <div className="bg-violet-950/40 border border-violet-500/40 rounded-xl p-2.5 flex items-center justify-between">
+                    <div>
+                      <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                        <Check className="w-3.5 h-3.5 text-emerald-400" />
+                        @{selectedUser.username || selectedUser.first_name || selectedUser.id}
+                      </div>
+                      <div className="text-[10px] text-gray-400">
+                        {selectedUser.first_name} {selectedUser.last_name || ''} • Rol: <span className="uppercase text-violet-400">{selectedUser.role || 'member'}</span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedUser(null)}
+                      className="text-xs text-gray-400 hover:text-white px-2 py-1 rounded bg-gray-800"
+                    >
+                      Cambiar
+                    </button>
+                  </div>
+                ) : (
+                  <div>
+                    <div className="relative mb-2">
+                      <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-2.5" />
+                      <input
+                        type="text"
+                        placeholder="Buscar miembro del grupo..."
+                        value={userSearch}
+                        onChange={(e) => setUserSearch(e.target.value)}
+                        className="w-full bg-[#182138] border border-gray-700 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-violet-500"
+                      />
+                    </div>
+
+                    <div className="max-h-32 overflow-y-auto space-y-1 pr-1 border border-gray-800 rounded-xl p-1 bg-[#141b2d]">
+                      {searchedUsers.length === 0 ? (
+                        <div className="text-center py-3 text-[11px] text-gray-500">
+                          No se encontraron miembros. El bot los detecta automáticamente cuando escriben en el grupo.
+                        </div>
+                      ) : (
+                        searchedUsers.map((u) => (
+                          <div
+                            key={u.id}
+                            onClick={() => setSelectedUser(u)}
+                            className="p-1.5 rounded-lg hover:bg-violet-600/20 cursor-pointer flex items-center justify-between text-xs text-gray-200 transition"
+                          >
+                            <span className="font-semibold text-white">
+                              @{u.username || u.first_name || u.id}
+                            </span>
+                            <span className="text-[10px] text-gray-400 uppercase">
+                              {u.role || 'member'}
+                            </span>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Tipo de Acción */}
               <div>
                 <label className="block text-xs font-medium text-gray-300 mb-1">Tipo de Acción</label>
                 <div className="grid grid-cols-3 gap-1.5 p-1 bg-gray-900 rounded-xl border border-gray-800">
                   <button
                     type="button"
                     onClick={() => setActionType('warn')}
-                    className={`py-1.5 text-xs font-bold rounded-lg ${actionType === 'warn' ? 'bg-yellow-500 text-black' : 'text-gray-400'}`}
+                    className={`py-1.5 text-xs font-bold rounded-lg transition ${actionType === 'warn' ? 'bg-yellow-500 text-black' : 'text-gray-400'}`}
                   >
                     Warn
                   </button>
                   <button
                     type="button"
                     onClick={() => setActionType('kick')}
-                    className={`py-1.5 text-xs font-bold rounded-lg ${actionType === 'kick' ? 'bg-amber-600 text-white' : 'text-gray-400'}`}
+                    className={`py-1.5 text-xs font-bold rounded-lg transition ${actionType === 'kick' ? 'bg-amber-600 text-white' : 'text-gray-400'}`}
                   >
                     Kick
                   </button>
                   <button
                     type="button"
                     onClick={() => setActionType('ban')}
-                    className={`py-1.5 text-xs font-bold rounded-lg ${actionType === 'ban' ? 'bg-rose-600 text-white' : 'text-gray-400'}`}
+                    className={`py-1.5 text-xs font-bold rounded-lg transition ${actionType === 'ban' ? 'bg-rose-600 text-white' : 'text-gray-400'}`}
                   >
                     Ban
                   </button>
                 </div>
               </div>
 
+              {/* Motivo */}
               <div>
-                <label className="block text-xs font-medium text-gray-300 mb-1">ID Numérico de Telegram *</label>
-                <input
-                  type="number"
-                  placeholder="Ej: 123456789"
-                  value={targetUserId}
-                  onChange={(e) => setTargetUserId(e.target.value)}
-                  className="w-full bg-[#1c2438] border border-gray-700 rounded-xl px-3 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-violet-500"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-gray-300 mb-1">@Username (Opcional)</label>
-                <input
-                  type="text"
-                  placeholder="@usuario"
-                  value={targetUsername}
-                  onChange={(e) => setTargetUsername(e.target.value)}
-                  className="w-full bg-[#1c2438] border border-gray-700 rounded-xl px-3 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-violet-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-gray-300 mb-1">Motivo</label>
+                <label className="block text-xs font-medium text-gray-300 mb-1">Motivo (Opcional)</label>
                 <textarea
                   rows={2}
                   placeholder="Spam, insultos, contenido no permitido..."
@@ -547,7 +612,7 @@ export const Moderacion: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  disabled={submitting}
+                  disabled={submitting || !selectedUser}
                   className="flex-1 py-2 px-3 rounded-xl bg-rose-600 hover:bg-rose-500 text-xs font-semibold text-white transition disabled:opacity-50"
                 >
                   {submitting ? 'Aplicando...' : 'Confirmar Sanción'}

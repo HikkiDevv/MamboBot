@@ -80,6 +80,13 @@ export function getUser(id) {
   return stmt.get(id);
 }
 
+export function getUserByUsername(username) {
+  if (!username) return null;
+  const clean = username.replace(/^@/, '').toLowerCase().trim();
+  const stmt = db.prepare('SELECT * FROM users WHERE LOWER(username) = ?');
+  return stmt.get(clean);
+}
+
 export function getAllUsers() {
   const stmt = db.prepare(`
     SELECT u.*, 
@@ -357,10 +364,10 @@ export function getModLogs(limit = 100) {
 
 export function getDashboardStats() {
   const totalUsersStmt = db.prepare('SELECT COUNT(*) as count FROM users');
-  const activeGiveawaysStmt = db.prepare('SELECT COUNT(*) as count FROM giveaways WHERE status = "active"');
-  const completedGiveawaysStmt = db.prepare('SELECT COUNT(*) as count FROM giveaways WHERE status = "completed"');
+  const activeGiveawaysStmt = db.prepare("SELECT COUNT(*) as count FROM giveaways WHERE status = 'active'");
+  const completedGiveawaysStmt = db.prepare("SELECT COUNT(*) as count FROM giveaways WHERE status = 'completed'");
   const logsCountStmt = db.prepare('SELECT COUNT(*) as count FROM moderation_logs');
-  const totalMessagesStmt = db.prepare('SELECT SUM(messages_count) as total FROM users');
+  const totalMessagesStmt = db.prepare('SELECT COALESCE(SUM(messages_count), 0) as total FROM users');
 
   return {
     totalUsers: totalUsersStmt.get().count,

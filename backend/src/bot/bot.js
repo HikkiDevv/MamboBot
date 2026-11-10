@@ -290,21 +290,33 @@ export async function startBot(customToken = null) {
       } catch {}
     });
 
-    // 9. Moderación manual (/warn, /kick, /ban)
+    // 9. Moderación manual (/warn, /kick, /ban) por respuesta o por @username
     bot.command('warn', async (ctx) => {
       const caller = getUser(ctx.from.id);
       if (!caller || (caller.role !== 'owner' && caller.role !== 'mod')) {
         return ctx.reply('⛔ No tienes permisos de moderación.');
       }
 
+      const textParts = ctx.message.text.split(' ').filter(Boolean);
       const replyMsg = ctx.message.reply_to_message;
       let targetUser = replyMsg ? replyMsg.from : null;
+      let reason = 'Incumplimiento de normas';
 
-      if (!targetUser) {
-        return ctx.reply('ℹ️ Responde al mensaje del usuario que deseas advertir con `/warn [motivo]`');
+      if (!targetUser && textParts.length > 1) {
+        const targetArg = textParts[1];
+        const found = getUserByUsername(targetArg);
+        if (found) {
+          targetUser = found;
+          reason = textParts.slice(2).join(' ') || reason;
+        }
+      } else if (targetUser) {
+        reason = textParts.slice(1).join(' ') || reason;
       }
 
-      const reason = ctx.message.text.split(' ').slice(1).join(' ') || 'Incumplimiento de normas';
+      if (!targetUser) {
+        return ctx.reply('ℹ️ Responde al mensaje del usuario o escribe `/warn @usuario [motivo]`', { parse_mode: 'Markdown' });
+      }
+
       addModLog({
         action: 'warn',
         targetUserId: targetUser.id,
@@ -325,25 +337,39 @@ export async function startBot(customToken = null) {
         return ctx.reply('⛔ No tienes permisos de moderación.');
       }
 
+      const textParts = ctx.message.text.split(' ').filter(Boolean);
       const replyMsg = ctx.message.reply_to_message;
-      if (!replyMsg) {
-        return ctx.reply('ℹ️ Responde al mensaje del usuario con `/kick [motivo]`');
+      let targetUser = replyMsg ? replyMsg.from : null;
+      let reason = 'Expulsado por moderación';
+
+      if (!targetUser && textParts.length > 1) {
+        const targetArg = textParts[1];
+        const found = getUserByUsername(targetArg);
+        if (found) {
+          targetUser = found;
+          reason = textParts.slice(2).join(' ') || reason;
+        }
+      } else if (targetUser) {
+        reason = textParts.slice(1).join(' ') || reason;
       }
 
-      const reason = ctx.message.text.split(' ').slice(1).join(' ') || 'Expulsado por moderación';
+      if (!targetUser) {
+        return ctx.reply('ℹ️ Responde al mensaje del usuario o escribe `/kick @usuario [motivo]`', { parse_mode: 'Markdown' });
+      }
+
       try {
-        await ctx.banChatMember(replyMsg.from.id);
-        await ctx.unbanChatMember(replyMsg.from.id);
+        await ctx.banChatMember(targetUser.id);
+        await ctx.unbanChatMember(targetUser.id);
 
         addModLog({
           action: 'kick',
-          targetUserId: replyMsg.from.id,
-          targetUsername: replyMsg.from.username || replyMsg.from.first_name,
+          targetUserId: targetUser.id,
+          targetUsername: targetUser.username || targetUser.first_name,
           modUserId: ctx.from.id,
           reason: reason
         });
 
-        await ctx.reply(`👢 Usuario @${replyMsg.from.username || replyMsg.from.first_name} ha sido expulsado.`);
+        await ctx.reply(`👢 Usuario @${targetUser.username || targetUser.first_name} ha sido expulsado.`);
       } catch (e) {
         await ctx.reply(`❌ Error al expulsar: ${e.message}`);
       }
@@ -355,24 +381,38 @@ export async function startBot(customToken = null) {
         return ctx.reply('⛔ No tienes permisos de moderación.');
       }
 
+      const textParts = ctx.message.text.split(' ').filter(Boolean);
       const replyMsg = ctx.message.reply_to_message;
-      if (!replyMsg) {
-        return ctx.reply('ℹ️ Responde al mensaje del usuario con `/ban [motivo]`');
+      let targetUser = replyMsg ? replyMsg.from : null;
+      let reason = 'Baneado permanentemente';
+
+      if (!targetUser && textParts.length > 1) {
+        const targetArg = textParts[1];
+        const found = getUserByUsername(targetArg);
+        if (found) {
+          targetUser = found;
+          reason = textParts.slice(2).join(' ') || reason;
+        }
+      } else if (targetUser) {
+        reason = textParts.slice(1).join(' ') || reason;
       }
 
-      const reason = ctx.message.text.split(' ').slice(1).join(' ') || 'Baneado permanentemente';
+      if (!targetUser) {
+        return ctx.reply('ℹ️ Responde al mensaje del usuario o escribe `/ban @usuario [motivo]`', { parse_mode: 'Markdown' });
+      }
+
       try {
-        await ctx.banChatMember(replyMsg.from.id);
+        await ctx.banChatMember(targetUser.id);
 
         addModLog({
           action: 'ban',
-          targetUserId: replyMsg.from.id,
-          targetUsername: replyMsg.from.username || replyMsg.from.first_name,
+          targetUserId: targetUser.id,
+          targetUsername: targetUser.username || targetUser.first_name,
           modUserId: ctx.from.id,
           reason: reason
         });
 
-        await ctx.reply(`🔨 Usuario @${replyMsg.from.username || replyMsg.from.first_name} ha sido baneado.`);
+        await ctx.reply(`🔨 Usuario @${targetUser.username || targetUser.first_name} ha sido baneado.`);
       } catch (e) {
         await ctx.reply(`❌ Error al banear: ${e.message}`);
       }
