@@ -11,8 +11,14 @@ export const BotPowerCard: React.FC<BotPowerCardProps> = ({ botStatus, onRefresh
   const [loading, setLoading] = useState(false);
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [tokenInput, setTokenInput] = useState('');
-  const [groupInput, setGroupInput] = useState('');
+  const [groupInput, setGroupInput] = useState(botStatus?.groupId || '');
   const [feedback, setFeedback] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (botStatus?.groupId && !groupInput) {
+      setGroupInput(botStatus.groupId);
+    }
+  }, [botStatus?.groupId]);
 
   const isRunning = botStatus?.isRunning;
 

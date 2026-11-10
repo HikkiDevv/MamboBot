@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getModLogs, getDashboardStats, addModLog } from '../database/queries.js';
+import { getModLogs, getDashboardStats, addModLog, getConfig } from '../database/queries.js';
 import { requireAuth, requireStaff } from './auth.js';
 import { getBot } from '../bot/bot.js';
 
@@ -37,7 +37,7 @@ moderacionRouter.post('/action', requireStaff, async (req, res) => {
   });
 
   const bot = getBot();
-  const groupId = process.env.TELEGRAM_GROUP_ID;
+  const groupId = getConfig('telegram_group_id') || process.env.TELEGRAM_GROUP_ID;
 
   if (bot && groupId) {
     try {

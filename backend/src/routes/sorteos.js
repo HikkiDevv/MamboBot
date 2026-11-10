@@ -11,7 +11,8 @@ import {
   updateRoleMultiplier, 
   getAllUsers, 
   updateUserMultiplier, 
-  updateUserRole 
+  updateUserRole,
+  getConfig
 } from '../database/queries.js';
 import { requireAuth, requireStaff } from './auth.js';
 import { getBot, scheduleGiveawayDraw } from '../bot/bot.js';
@@ -46,9 +47,9 @@ sorteosRouter.post('/', requireStaff, async (req, res) => {
     return res.status(400).json({ error: 'Premio y duración son requeridos' });
   }
 
-  const targetChatId = chatId || process.env.TELEGRAM_GROUP_ID;
+  const targetChatId = chatId || getConfig('telegram_group_id') || process.env.TELEGRAM_GROUP_ID;
   if (!targetChatId) {
-    return res.status(400).json({ error: 'Chat ID del grupo de Telegram no configurado' });
+    return res.status(400).json({ error: 'Chat ID del grupo de Telegram no configurado en la App' });
   }
 
   const endsAt = new Date(Date.now() + durationMinutes * 60 * 1000).toISOString();
