@@ -1,0 +1,91 @@
+name: Compilar APK mamboBot Android (Debug)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  build-apk:
+    name: Compilar APK Android
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: 1. Checkout del Código Fuente
+        uses: actions/checkout@v4
+
+      - name: 2. Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: 3. Configurar Java 17 (JDK)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: 4. Aceptar Licencias de Android SDK
+        run: |
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses 2>/dev/null || true
+
+      - name: 5. Instalar Dependencias de Node
+        run: |
+          npm ci || npm install
+
+      - name: 6. Compilar Aplicación Web con Vite
+        run: |
+          npm run build
+
+      - name: 7. Sincronizar Proyecto Nativo Capacitor
+        run: |
+          npx cap add android || true
+          npx cap sync android
+
+      - name: 8. Conceder Permisos de Ejecución a Gradle Wrapper
+        run: |
+          chmod +x android/gradlew || true
+
+      - name: 9. Compilar APK Debug con Gradle
+        run: |
+          cd android
+          ./gradlew assembleDebug --stacktrace --no-daemon
+
+      - name: 10. Verificar y Renombrar APK
+        run: |
+          RAW_APK=$(find android/app/build/outputs/apk/debug -name "*.apk" | head -n 1)
+          if [ -z "$RAW_APK" ] || [ ! -f "$RAW_APK" ]; then
+            echo "ERROR: El archivo APK no fue generado"
+            exit 1
+          fi
+          FINAL_APK="android/app/build/outputs/apk/debug/mamboBot-Admin-v1.0.apk"
+          cp "$RAW_APK" "$FINAL_APK"
+          echo "APK_PATH=$FINAL_APK" >> $GITHUB_ENV
+          echo "APK generado exitosamente: $FINAL_APK"
+
+      - name: 11. Publicar Artefacto Descargable en GitHub Actions
+        uses: actions/upload-artifact@v4
+        with:
+          name: mamboBot-Admin-APK
+          path: ${{ env.APK_PATH }}
+          retention-days: 14
+          if-no-files-found: error
+
+      - name: 12. Publicar Release Pública con APK Directo
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main'
+        with:
+          tag_name: v1.0-apk
+          name: mamboBot Admin v1.0 (APK)
+          body: |
+            Descarga directa de APK mamboBot Admin v1.0 para Android.
+            Incluye control de encendido/apagado del bot, sorteos con probabilidades ponderadas y panel de moderación.
+          files: ${{ env.APK_PATH }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
