@@ -23,6 +23,35 @@ export function getAllConfig() {
   return config;
 }
 
+export function getFilterConfig() {
+  const welcomeEnabled = getConfig('welcome_enabled') === 'true';
+  const welcomeMessage = getConfig('welcome_message') || '👋 ¡Bienvenido/a {usuario} a {grupo}!';
+  const blockLinksEnabled = getConfig('block_links_enabled') === 'true';
+  let blacklistWords = [];
+  try {
+    blacklistWords = JSON.parse(getConfig('blacklist_words') || '[]');
+  } catch {
+    blacklistWords = [];
+  }
+
+  return {
+    welcomeEnabled,
+    welcomeMessage,
+    blockLinksEnabled,
+    blacklistWords
+  };
+}
+
+export function updateFilterConfig({ welcomeEnabled, welcomeMessage, blockLinksEnabled, blacklistWords }) {
+  if (welcomeEnabled !== undefined) setConfig('welcome_enabled', welcomeEnabled ? 'true' : 'false');
+  if (welcomeMessage !== undefined) setConfig('welcome_message', welcomeMessage);
+  if (blockLinksEnabled !== undefined) setConfig('block_links_enabled', blockLinksEnabled ? 'true' : 'false');
+  if (blacklistWords !== undefined) {
+    setConfig('blacklist_words', JSON.stringify(Array.isArray(blacklistWords) ? blacklistWords : []));
+  }
+  return getFilterConfig();
+}
+
 // ==================== USUARIOS & ROLES ====================
 export function upsertUser(user) {
   const now = new Date().toISOString();
@@ -38,8 +67,8 @@ export function upsertUser(user) {
     return getUser(user.id);
   } else {
     const stmt = db.prepare(`
-      INSERT INTO users (id, username, first_name, last_name, role, custom_multiplier, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO users (id, username, first_name, last_name, role, custom_multiplier, xp, level, messages_count, referrals_count, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, 0, 1, 0, 0, ?, ?)
     `);
     stmt.run(user.id, user.username || null, user.first_name || '', user.last_name || '', user.role || 'member', 1.0, now, now);
     return getUser(user.id);
@@ -55,10 +84,10 @@ export function getAllUsers() {
   const stmt = db.prepare(`
     SELECT u.*, 
       COALESCE(rc.multiplier, 1.0) as role_multiplier,
-      (u.custom_multiplier * COALESCE(rc.multiplier, 1.0)) as effective_multiplier
+      (u.custom_multiplier * COALESCE(rc.multiplier, 1.0) + ((u.level - 1) * 0.05) + (u.referrals_count * 0.1)) as effective_multiplier
     FROM users u
     LEFT JOIN roles_config rc ON u.role = rc.role_name
-    ORDER BY u.updated_at DESC
+    ORDER BY u.messages_count DESC, u.level DESC
     LIMIT 200
   `);
   return stmt.all();
@@ -89,6 +118,54 @@ export function updateRoleMultiplier(roleName, multiplier) {
   return getRolesConfig();
 }
 
+// ==================== SISTEMA DE NIVELES & REFERIDOS ====================
+export function recordUserMessage(userId) {
+  const user = getUser(userId);
+  if (!user) return null;
+
+  const newMessages = (user.messages_count || 0) + 1;
+  const xpGain = 10;
+  const newXp = (user.xp || 0) + xpGain;
+  
+  // Fórmula de nivel: nivel = floor(sqrt(XP / 50)) + 1
+  const calculatedLevel = Math.max(1, Math.floor(Math.sqrt(newXp / 50)) + 1);
+  const leveledUp = calculatedLevel > (user.level || 1);
+
+  const stmt = db.prepare(`
+    UPDATE users 
+    SET messages_count = ?, xp = ?, level = ?, updated_at = ?
+    WHERE id = ?
+  `);
+  stmt.run(newMessages, newXp, calculatedLevel, new Date().toISOString(), userId);
+
+  return {
+    userId,
+    messagesCount: newMessages,
+    xp: newXp,
+    level: calculatedLevel,
+    leveledUp
+  };
+}
+
+export function processReferral(newUserId, referrerId) {
+  if (!referrerId || referrerId === newUserId) return false;
+  
+  const newUser = getUser(newUserId);
+  const referrer = getUser(referrerId);
+  
+  if (!referrer) return false;
+  if (newUser && newUser.referred_by) return false; // Ya fue referido antes
+
+  const now = new Date().toISOString();
+  const stmtNew = db.prepare('UPDATE users SET referred_by = ?, updated_at = ? WHERE id = ?');
+  stmtNew.run(referrerId, now, newUserId);
+
+  const stmtRef = db.prepare('UPDATE users SET referrals_count = referrals_count + 1, updated_at = ? WHERE id = ?');
+  stmtRef.run(now, referrerId);
+
+  return true;
+}
+
 export function calculateUserWeight(userId) {
   const user = getUser(userId);
   if (!user) return 1.0;
@@ -98,7 +175,26 @@ export function calculateUserWeight(userId) {
   const roleMult = roleConf ? roleConf.multiplier : 1.0;
   
   const customMult = user.custom_multiplier || 1.0;
-  return Number((roleMult * customMult).toFixed(2));
+  // Bono por nivel: +0.05 por cada nivel superior al nivel 1
+  const levelBonus = Math.max(0, ((user.level || 1) - 1) * 0.05);
+  // Bono por referidos: +0.10 por cada amigo invitado
+  const referralBonus = (user.referrals_count || 0) * 0.10;
+
+  const total = (roleMult * customMult) + levelBonus + referralBonus;
+  return Number(total.toFixed(2));
+}
+
+export function getLeaderboard(limit = 25) {
+  const stmt = db.prepare(`
+    SELECT u.id, u.username, u.first_name, u.role, u.level, u.xp, u.messages_count, u.referrals_count,
+      (u.custom_multiplier * COALESCE(rc.multiplier, 1.0) + ((u.level - 1) * 0.05) + (u.referrals_count * 0.1)) as calculated_weight
+    FROM users u
+    LEFT JOIN roles_config rc ON u.role = rc.role_name
+    WHERE u.is_banned = 0
+    ORDER BY u.messages_count DESC, u.xp DESC, u.referrals_count DESC
+    LIMIT ?
+  `);
+  return stmt.all(limit);
 }
 
 // ==================== AUTENTICACIÓN TELEGRAM ====================
@@ -191,7 +287,7 @@ export function addParticipant(giveawayId, userId) {
 
 export function getGiveawayParticipants(giveawayId) {
   const stmt = db.prepare(`
-    SELECT gp.*, u.username, u.first_name, u.last_name, u.role
+    SELECT gp.*, u.username, u.first_name, u.last_name, u.role, u.level
     FROM giveaway_participants gp
     JOIN users u ON gp.user_id = u.id
     WHERE gp.giveaway_id = ?
@@ -264,11 +360,13 @@ export function getDashboardStats() {
   const activeGiveawaysStmt = db.prepare('SELECT COUNT(*) as count FROM giveaways WHERE status = "active"');
   const completedGiveawaysStmt = db.prepare('SELECT COUNT(*) as count FROM giveaways WHERE status = "completed"');
   const logsCountStmt = db.prepare('SELECT COUNT(*) as count FROM moderation_logs');
+  const totalMessagesStmt = db.prepare('SELECT SUM(messages_count) as total FROM users');
 
   return {
     totalUsers: totalUsersStmt.get().count,
     activeGiveaways: activeGiveawaysStmt.get().count,
     completedGiveaways: completedGiveawaysStmt.get().count,
-    totalLogs: logsCountStmt.get().count
+    totalLogs: logsCountStmt.get().count,
+    totalMessages: totalMessagesStmt.get().total || 0
   };
 }

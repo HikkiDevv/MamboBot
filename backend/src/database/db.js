@@ -8,7 +8,6 @@ const dbPath = path.join(__dirname, '../../mambobot.db');
 
 export const db = new DatabaseSync(dbPath);
 
-// Habilitar WAL mode y foreign keys para alto rendimiento
 db.exec('PRAGMA journal_mode = WAL;');
 db.exec('PRAGMA foreign_keys = ON;');
 
@@ -26,6 +25,11 @@ export function initDatabase() {
       last_name TEXT,
       role TEXT DEFAULT 'member',
       custom_multiplier REAL DEFAULT 1.0,
+      xp INTEGER DEFAULT 0,
+      level INTEGER DEFAULT 1,
+      messages_count INTEGER DEFAULT 0,
+      referrals_count INTEGER DEFAULT 0,
+      referred_by INTEGER,
       is_banned INTEGER DEFAULT 0,
       warnings_count INTEGER DEFAULT 0,
       created_at TEXT,
@@ -86,5 +90,30 @@ export function initDatabase() {
     );
   `);
 
-  console.log('[DB] Base de datos mamboBot inicializada correctamente.');
+  // Asegurar columnas nuevas en caso de que la DB ya existiera
+  try {
+    db.exec(`
+      ALTER TABLE users ADD COLUMN xp INTEGER DEFAULT 0;
+      ALTER TABLE users ADD COLUMN level INTEGER DEFAULT 1;
+      ALTER TABLE users ADD COLUMN messages_count INTEGER DEFAULT 0;
+      ALTER TABLE users ADD COLUMN referrals_count INTEGER DEFAULT 0;
+      ALTER TABLE users ADD COLUMN referred_by INTEGER;
+    `);
+  } catch {
+    // Las columnas ya existen, ignorar error
+  }
+
+  // Valores de configuración por defecto
+  const defaultConfigs = [
+    ['welcome_enabled', 'true'],
+    ['welcome_message', '👋 ¡Bienvenido/a {usuario} a {grupo}! 🎉\nParticipa en nuestros sorteos activos tocando el botón de abajo.'],
+    ['block_links_enabled', 'true'],
+    ['blacklist_words', '["casino","apuestas","free money","t.me/","whatsapp.com","crypto giveaway"]']
+  ];
+
+  for (const [k, v] of defaultConfigs) {
+    db.exec(`INSERT OR IGNORE INTO config (key, value) VALUES ('${k}', '${v.replace(/'/g, "''")}');`);
+  }
+
+  console.log('[DB] Base de datos mamboBot inicializada con soporte de niveles, referidos y filtros.');
 }

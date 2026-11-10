@@ -1,5 +1,13 @@
 import { Router } from 'express';
-import { getModLogs, getDashboardStats, addModLog, getConfig } from '../database/queries.js';
+import { 
+  getModLogs, 
+  getDashboardStats, 
+  addModLog, 
+  getConfig, 
+  getFilterConfig, 
+  updateFilterConfig, 
+  getLeaderboard 
+} from '../database/queries.js';
 import { requireAuth, requireStaff } from './auth.js';
 import { getBot } from '../bot/bot.js';
 
@@ -20,7 +28,31 @@ moderacionRouter.get('/logs', (req, res) => {
   res.json(logs);
 });
 
-// 3. Registrar acción de moderación manual desde el panel
+// 3. Leaderboard / Ranking de miembros
+moderacionRouter.get('/leaderboard', (req, res) => {
+  const limit = parseInt(req.query.limit, 10) || 50;
+  const leaders = getLeaderboard(limit);
+  res.json(leaders);
+});
+
+// 4. Configuración de Filtros (Lista negra, Bloqueo de links y Mensaje de Bienvenida)
+moderacionRouter.get('/filters', (req, res) => {
+  const filters = getFilterConfig();
+  res.json(filters);
+});
+
+moderacionRouter.post('/filters', requireStaff, (req, res) => {
+  const { welcomeEnabled, welcomeMessage, blockLinksEnabled, blacklistWords } = req.body;
+  const updated = updateFilterConfig({
+    welcomeEnabled,
+    welcomeMessage,
+    blockLinksEnabled,
+    blacklistWords
+  });
+  res.json({ message: 'Configuración de filtros y bienvenida actualizada', filters: updated });
+});
+
+// 5. Registrar acción de moderación manual desde el panel
 moderacionRouter.post('/action', requireStaff, async (req, res) => {
   const { action, targetUserId, targetUsername, reason } = req.body;
 
