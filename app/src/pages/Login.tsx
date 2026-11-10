@@ -51,7 +51,7 @@ export const Login: React.FC<LoginProps> = ({ onSuccess }) => {
         method: 'POST',
         body: JSON.stringify({
           key: ownerKey.trim(),
-          username: ownerUsername.trim() || 'Owner'
+          username: ownerUsername.trim() || 'mambo'
         })
       });
 
@@ -145,7 +145,7 @@ export const Login: React.FC<LoginProps> = ({ onSuccess }) => {
                 </label>
                 <input
                   type="text"
-                  placeholder="@duena"
+                  placeholder="@mambo"
                   value={ownerUsername}
                   onChange={(e) => setOwnerUsername(e.target.value)}
                   className="w-full bg-[#182138] border border-gray-700/80 rounded-xl px-3 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-violet-500"

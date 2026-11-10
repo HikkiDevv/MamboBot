@@ -43,8 +43,8 @@ authRouter.post('/login-owner', (req, res) => {
   const ownerId = 100000000;
   const user = {
     id: ownerId,
-    username: username || 'Owner',
-    first_name: 'Owner',
+    username: username || 'mambo',
+    first_name: 'mambo',
     role: 'owner'
   };
 
