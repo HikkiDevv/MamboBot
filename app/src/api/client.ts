@@ -1,4 +1,4 @@
-const DEFAULT_API_URL = 'http://localhost:4000/api';
+const DEFAULT_API_URL = 'https://mambobot-backend-production.up.railway.app/api';
 
 export function getApiBaseUrl(): string {
   return localStorage.getItem('mambobot_api_url') || DEFAULT_API_URL;
