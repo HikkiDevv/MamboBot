@@ -1,0 +1,24 @@
+# Dependencias
+node_modules/
+**/node_modules/
+
+# Compilaciones
+dist/
+**/dist/
+build/
+android/app/build/
+android/.gradle/
+.gradle/
+
+# Entornos y datos
+.env
+*.env
+*.log
+*.db
+*.db-wal
+*.db-shm
+mambobot.db
+
+# Sistema
+.DS_Store
+Thumbs.db
